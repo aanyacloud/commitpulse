@@ -373,6 +373,38 @@ describe('generateSVG', () => {
     expect(svg).toContain('CURRENT_STREAK');
   });
 
+  describe('LoC Mode', () => {
+    it('renders towers when LoC data exists (not ghost city)', () => {
+      const locCalendar: ContributionCalendar = {
+        totalContributions: 0,
+        weeks: [
+          {
+            contributionDays: [
+              {
+                contributionCount: 0,
+                locAdditions: 50,
+                locDeletions: 10,
+                date: '2024-06-10',
+              },
+            ],
+          },
+        ],
+      } as ContributionCalendar;
+
+      const svg = generateSVG(
+        mockStats,
+        { user: 'avi', mode: 'loc' } as unknown as BadgeParams,
+        locCalendar
+      );
+
+      // Should contain towers (LoC data exists, so it should not render the ghost city)
+      expect(svg).toContain('class="cp-tower');
+
+      // Should NOT contain stroke-width="0.5" (the ghost city marker)
+      expect(svg).not.toContain('stroke-width="0.5"');
+    });
+  });
+
   // ── Auto-theme (prefers-color-scheme) tests ──────────────────────────────
   // These verify that theme=auto produces an SVG that switches between light
   // and dark color palettes using CSS custom properties and a media query,
