@@ -116,6 +116,32 @@ describe('GET /api/streak', () => {
       expect(body.details.fieldErrors.grace[0]).toBe('grace must be an integer between 0 and 7');
     });
 
+    it('returns 400 when days=0 is provided', async () => {
+      const response = await GET(
+        makeRequest({
+          user: 'octocat',
+          days: '0',
+        })
+      );
+
+      expect(response.status).toBe(400);
+
+      const body = await response.json();
+
+      expect(body.error).toBe('Invalid parameters');
+    });
+
+    it('returns 400 when days is negative', async () => {
+      const response = await GET(
+        makeRequest({
+          user: 'octocat',
+          days: '-5',
+        })
+      );
+
+      expect(response.status).toBe(400);
+    });
+
     it('returns 400 Bad Request when ?layout= is set to an unsupported format', async () => {
       const response = await GET(
         makeRequest({
@@ -251,12 +277,52 @@ describe('GET /api/streak', () => {
       expect(fetchGitHubContributions).not.toHaveBeenCalled();
     });
 
+    it('returns 400 when grace is below the minimum value', async () => {
+      const response = await GET(
+        makeRequest({
+          user: 'octocat',
+          grace: '-1',
+        })
+      );
+
+      expect(response.status).toBe(400);
+
+      const body = await response.json();
+
+      expect(body.error).toBe('Invalid parameters');
+      expect(body.details.fieldErrors.grace[0]).toBe('grace must be an integer between 0 and 7');
+
+      expect(fetchGitHubContributions).not.toHaveBeenCalled();
+    });
+
     it('returns 400 for unsupported ?layout query parameter values (strict schema validation)', async () => {
       const response = await GET(
         new Request('http://localhost:3000/api/streak?user=octocat&layout=unsupported_layout')
       );
 
       expect(response.status).toBe(400);
+    });
+
+    it('returns 400 when an invalid theme value is provided and lists allowed themes', async () => {
+      const response = await GET(
+        makeRequest({
+          user: 'octocat',
+          theme: 'nonexistent_theme_name',
+        })
+      );
+
+      expect(response.status).toBe(400);
+      const body = await response.json();
+      expect(body.error).toBe('Invalid parameters');
+      expect(body.details.fieldErrors.theme).toBeDefined();
+      const errorMessage = body.details.fieldErrors.theme[0];
+      expect(errorMessage).toContain('Invalid theme');
+      expect(errorMessage).toContain('Supported themes:');
+      expect(errorMessage).toContain('auto');
+      expect(errorMessage).toContain('random');
+      expect(errorMessage).toContain('dark');
+      expect(errorMessage).toContain('light');
+      expect(fetchGitHubContributions).not.toHaveBeenCalled();
     });
 
     it('should return 200 OK and valid SVG when the optional repo query parameter is provided', async () => {
@@ -570,6 +636,41 @@ describe('GET /api/streak', () => {
 
       expect(response.status).toBe(200);
     });
+
+    it('produces different SVG output for scale=log versus scale=linear with mixed contribution counts', async () => {
+      // Mix of low (1) and high (100) counts: linear scales them 1× vs 100×,
+      // log compresses the ratio to log₂(2) vs log₂(101) — guaranteed to produce
+      // different tower heights and therefore different path data in the SVG.
+      vi.mocked(fetchGitHubContributions).mockResolvedValue({
+        calendar: {
+          totalContributions: 203,
+          weeks: [
+            {
+              contributionDays: [
+                { contributionCount: 1, date: '2024-06-10' },
+                { contributionCount: 5, date: '2024-06-11' },
+                { contributionCount: 20, date: '2024-06-12' },
+                { contributionCount: 100, date: '2024-06-13' },
+                { contributionCount: 50, date: '2024-06-14' },
+                { contributionCount: 5, date: '2024-06-15' },
+                { contributionCount: 1, date: '2024-06-16' },
+              ],
+            },
+          ],
+        },
+        repoContributions: [],
+      } as unknown as ExtendedContributionData);
+
+      const linearResponse = await GET(makeRequest({ user: 'octocat', scale: 'linear' }));
+      const logResponse = await GET(makeRequest({ user: 'octocat', scale: 'log' }));
+
+      const linearBody = await linearResponse.text();
+      const logBody = await logResponse.text();
+
+      expect(linearResponse.status).toBe(200);
+      expect(logResponse.status).toBe(200);
+      expect(linearBody).not.toBe(logBody);
+    });
   });
 
   describe('year parameter', () => {
@@ -779,6 +880,22 @@ describe('GET /api/streak', () => {
       expect(fieldError).toContain('dark');
       expect(fieldError).toContain('light');
       expect(fieldError).toContain('neon');
+    });
+
+    it('accepts capitalized or mixed-case theme parameter like "NEON" and maps it correctly', async () => {
+      const response = await GET(makeRequest({ user: 'octocat', theme: 'NEON' }));
+      const body = await response.text();
+
+      expect(response.status).toBe(200);
+      expect(body).toContain('ff00ff'); // Neon theme accent is #ff00ff — confirms the neon theme is applied
+    });
+
+    it('accepts mixed-case "random" or "auto" and resolves correctly', async () => {
+      const response = await GET(makeRequest({ user: 'octocat', theme: 'aUtO' }));
+      const body = await response.text();
+
+      expect(response.status).toBe(200);
+      expect(body).toContain('prefers-color-scheme: dark');
     });
   });
 

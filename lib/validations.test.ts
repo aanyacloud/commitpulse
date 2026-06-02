@@ -229,6 +229,20 @@ describe('streakParamsSchema', () => {
     }
   });
 
+  it('should fail when grace is below the minimum value of 0', () => {
+    const result = streakParamsSchema.safeParse({
+      user: 'octocat',
+      grace: '-1',
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.flatten().fieldErrors.grace?.[0]).toBe(
+        'grace must be an integer between 0 and 7'
+      );
+    }
+  });
+
   it('accepts a valid width value', () => {
     const result = streakParamsSchema.safeParse({
       user: 'octocat',
@@ -448,6 +462,19 @@ describe('streakParamsSchema', () => {
 
     if (result.success) {
       expect(result.data.delta_format).toBe('percent');
+    }
+  });
+
+  it('rejects invalid IANA timezone names', () => {
+    const result = streakParamsSchema.safeParse({
+      user: 'octocat',
+      tz: 'Mars/Cyonia',
+    });
+
+    expect(result.success).toBe(false);
+
+    if (!result.success) {
+      expect(result.error.issues[0]?.message).toBe('Invalid timezone');
     }
   });
 });
@@ -758,6 +785,18 @@ describe('streakParamsSchema — org parameter validation', () => {
       expect(fieldError).toBe('Invalid organization name format');
     }
   });
+
+  it('should reject org parameter with invalid alphanumeric format', () => {
+    const result = streakParamsSchema.safeParse({
+      user: 'octocat',
+      org: 'invalid_org_name_with_spaces',
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.flatten().fieldErrors.org?.[0]).toBe('Invalid organization name format');
+    }
+  });
 });
 
 describe('ogParamsSchema', () => {
@@ -848,6 +887,29 @@ describe('streakParamsSchema — theme validation', () => {
       expect(fieldError).toContain('dark');
       expect(fieldError).toContain('light');
       expect(fieldError).toContain('neon');
+    }
+  });
+
+  it('should reject nonexistent_theme_name and verify allowed themes are listed in error', () => {
+    const result = streakParamsSchema.safeParse({
+      user: 'octocat',
+      theme: 'nonexistent_theme_name',
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const fieldErrors = result.error.flatten().fieldErrors;
+      expect(fieldErrors.theme).toBeDefined();
+      const errorMessage = fieldErrors.theme?.[0];
+      expect(errorMessage).toContain('Invalid theme');
+      expect(errorMessage).toContain('Supported themes:');
+      expect(errorMessage).toContain('auto');
+      expect(errorMessage).toContain('random');
+      expect(errorMessage).toContain('dark');
+      expect(errorMessage).toContain('light');
+      expect(errorMessage).toContain('neon');
+      expect(errorMessage).toContain('github');
+      expect(errorMessage).toContain('dracula');
     }
   });
 });
@@ -1059,69 +1121,47 @@ describe('streakParamsSchema — layout query validation boundaries (Variation 2
   });
 });
 
-/* ==========================================================================
- * LAYOUT PARAMETER — QUERY VALIDATION BOUNDARIES (VARIATION 2)
- * ========================================================================== */
-
-describe('streakParamsSchema — layout query validation boundaries (Variation 2)', () => {
-  it('rejects unsupported_layout and marks the parse as failed', () => {
+describe('streakParamsSchema — case-insensitive theme matching', () => {
+  it('accepts lowercase theme parameters', () => {
     const result = streakParamsSchema.safeParse({
       user: 'octocat',
-      layout: 'unsupported_layout',
+      theme: 'neon',
     });
-
-    expect(result.success).toBe(false);
-  });
-
-  it('surfaces a meaningful error message for unsupported_layout', () => {
-    const result = streakParamsSchema.safeParse({
-      user: 'octocat',
-      layout: 'unsupported_layout',
-    });
-
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      const messages = result.error.issues.map((i) => i.message).join(' ');
-      expect(messages).toContain('Invalid layout format');
-    }
-  });
-
-  it('accepts "default" as a valid layout value', () => {
-    const result = streakParamsSchema.safeParse({
-      user: 'octocat',
-      layout: 'default',
-    });
-
-    expect(result.success).toBe(true);
-  });
-
-  it('accepts "compact" as a valid layout value', () => {
-    const result = streakParamsSchema.safeParse({
-      user: 'octocat',
-      layout: 'compact',
-    });
-
-    expect(result.success).toBe(true);
-  });
-
-  it('accepts "full" as a valid layout value', () => {
-    const result = streakParamsSchema.safeParse({
-      user: 'octocat',
-      layout: 'full',
-    });
-
-    expect(result.success).toBe(true);
-  });
-
-  it('treats omitted layout as undefined (no validation error)', () => {
-    const result = streakParamsSchema.safeParse({
-      user: 'octocat',
-    });
-
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.layout).toBeUndefined();
+      expect(result.data.theme).toBe('neon');
     }
+  });
+
+  it('accepts uppercase theme parameters and maps correctly', () => {
+    const result = streakParamsSchema.safeParse({
+      user: 'octocat',
+      theme: 'NEON',
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      // Maps capitalized input back to lowercase registry key
+      expect(result.data.theme).toBe('neon');
+    }
+  });
+
+  it('accepts mixed-case theme parameters and maps correctly', () => {
+    const result = streakParamsSchema.safeParse({
+      user: 'octocat',
+      theme: 'DrAcUlA',
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.theme).toBe('dracula');
+    }
+  });
+
+  it('rejects completely invalid theme name', () => {
+    const result = streakParamsSchema.safeParse({
+      user: 'octocat',
+      theme: 'fictionaltheme',
+    });
+    expect(result.success).toBe(false);
   });
 });
 
