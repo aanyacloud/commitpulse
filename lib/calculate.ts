@@ -1,5 +1,11 @@
 // lib/calculate.ts
-import type { ContributionCalendar, ContributionDay, StreakStats, MonthlyStats } from '../types';
+import type {
+  ContributionCalendar,
+  ContributionDay,
+  ContributionWeek,
+  StreakStats,
+  MonthlyStats,
+} from '../types';
 
 /* ==========================================================================
  * STREAK & CALENDAR CALCULATIONS
@@ -19,7 +25,11 @@ export function findTodayIndex(days: ContributionDay[], timezone: string, now: D
 
   const localTodayIndex = days.findIndex((d) => d.date === localTodayStr);
 
-  return localTodayIndex !== -1 ? localTodayIndex : days.length - 1;
+  // If today's date isn't present in the calendar, return -1 so callers can
+  // decide whether falling back to the last available day is appropriate.
+  // Previously we always returned the last index which could cause an
+  // overstated current streak when the calendar is partial or stale.
+  return localTodayIndex !== -1 ? localTodayIndex : -1;
 }
 
 export function calculateStreak(
@@ -47,15 +57,40 @@ export function calculateStreak(
 
   // 2. Calculate Current Streak (Backwards loop with Grace Period)
   const localTodayStr = new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).format(now);
-  const todayIndex = findTodayIndex(days, timezone, now);
+  let todayIndex = findTodayIndex(days, timezone, now);
 
+  // If the calendar doesn't contain today's date, only fall back to the
+  // last available day when the local date is after the calendar's last
+  // reported date (i.e. the calendar is stale). Otherwise, avoid guessing
+  // and treat today's data as missing to prevent overstating the streak.
   if (todayIndex < 0) {
-    return {
-      currentStreak: 0,
-      longestStreak: 0,
-      totalContributions: calendar.totalContributions,
-      todayDate: localTodayStr,
-    };
+    const lastIndex = days.length - 1;
+    if (lastIndex < 0) {
+      return {
+        currentStreak: 0,
+        longestStreak: 0,
+        totalContributions: calendar.totalContributions,
+        todayDate: localTodayStr,
+      };
+    }
+
+    const lastDateStr = days[lastIndex].date;
+
+    // Compare YYYY-MM-DD strings lexicographically — this works for ISO dates.
+    if (localTodayStr > lastDateStr) {
+      // Local date is after the last reported date → calendar is stale.
+      todayIndex = lastIndex;
+    } else {
+      // Calendar contains dates after (or unrelated to) local today, or
+      // today is simply missing from a partial range — don't assume the
+      // streak is alive based on the last day.
+      return {
+        currentStreak: 0,
+        longestStreak,
+        totalContributions: calendar.totalContributions,
+        todayDate: localTodayStr,
+      };
+    }
   }
 
   let isStreakAlive = false;
@@ -124,17 +159,38 @@ export function calculateMonthlyStats(
     }
   }
 
+  const expectedPrevMonthStart = `${prevMonthPrefix}-01`;
+  const expectedCurrentMonthEnd = localTodayStr;
+
+  let firstDate = '';
+  let lastDate = '';
+  if (days.length > 0) {
+    let minDate = days[0].date;
+    let maxDate = days[0].date;
+    for (const d of days) {
+      if (d.date < minDate) minDate = d.date;
+      if (d.date > maxDate) maxDate = d.date;
+    }
+    firstDate = minDate;
+    lastDate = maxDate;
+  }
+
+  const hasDays = days.length > 0;
+  const isPrevMonthComplete = hasDays && firstDate <= expectedPrevMonthStart;
+  const isCurrentMonthComplete = hasDays && lastDate >= expectedCurrentMonthEnd;
+  const isCalendarComplete = isPrevMonthComplete && isCurrentMonthComplete;
+
   const currentMonthName = new Intl.DateTimeFormat('en-US', {
     timeZone: timezone,
     month: 'long',
   }).format(now);
 
   const deltaAbsolute = currentMonthTotal - previousMonthTotal;
-  // When there is no baseline (previous month = 0), the percentage change is
-  // mathematically undefined. Return null so the renderer can display 'N/A'
-  // instead of the misleading hardcoded +100%.
+  // When there is no baseline (previous month = 0), or the calendar is incomplete,
+  // the percentage change is mathematically undefined or untrustworthy.
+  // Return null so the renderer can display 'N/A' instead of misleading metrics.
   const deltaPercentage: number | null =
-    previousMonthTotal === 0
+    !isCalendarComplete || previousMonthTotal === 0
       ? null
       : (() => {
           const pct = Math.round((deltaAbsolute / previousMonthTotal) * 100);
@@ -186,6 +242,7 @@ export function aggregateCalendars(calendars: ContributionCalendar[]): Contribut
   }
 
   // Deep clone the base calendar so we don't mutate the original object
+  // Deep clone the base calendar so we don't mutate the original object
   const aggregatedBase = JSON.parse(JSON.stringify(baseCalendar)) as ContributionCalendar;
 
   aggregatedBase.totalContributions = totalContributions;
@@ -197,6 +254,31 @@ export function aggregateCalendars(calendars: ContributionCalendar[]): Contribut
     });
   });
 
+  const existingDates = new Set<string>();
+
+  (aggregatedBase.weeks || []).forEach((week) => {
+    (week.contributionDays || []).forEach((day) => {
+      existingDates.add(day.date);
+    });
+  });
+
+  const missingDays: ContributionDay[] = [];
+
+  for (const [date, contributionCount] of dateMap.entries()) {
+    if (!existingDates.has(date)) {
+      missingDays.push({
+        date,
+        contributionCount,
+      });
+    }
+  }
+
+  missingDays.sort((a, b) => a.date.localeCompare(b.date));
+  for (const day of missingDays) {
+    aggregatedBase.weeks.unshift({
+      contributionDays: [day],
+    });
+  }
   return aggregatedBase;
 }
 /**
@@ -232,10 +314,10 @@ export function calculateWrappedStats(calendar: ContributionCalendar) {
   });
 
   // Find busiest month string
-  const busiestMonthStr = Object.keys(monthCounts).reduce(
-    (a, b) => (monthCounts[a] > monthCounts[b] ? a : b),
-    ''
-  );
+  const busiestMonthStr =
+    Object.keys(monthCounts).length === 0
+      ? 'N/A'
+      : Object.keys(monthCounts).reduce((a, b) => (monthCounts[a] > monthCounts[b] ? a : b));
 
   return {
     totalContributions: calendar.totalContributions,

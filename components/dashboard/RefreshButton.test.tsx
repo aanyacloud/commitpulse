@@ -46,6 +46,7 @@ beforeEach(() => {
 
   vi.mocked(useSearchParams).mockReturnValue({
     get: vi.fn().mockReturnValue(null),
+    toString: vi.fn().mockReturnValue(''),
   } as any);
 });
 
@@ -54,6 +55,22 @@ afterEach(() => {
 });
 
 describe('RefreshButton', () => {
+  it('has correct aria-label for accessibility', () => {
+    render(<RefreshButton username="testuser" />);
+    expect(screen.getByRole('button')).toHaveAttribute(
+      'aria-label',
+      'Refresh dashboard contribution data'
+    );
+  });
+
+  it('has correct title attribute for tooltip accessibility', () => {
+    render(<RefreshButton username="testuser" />);
+    expect(screen.getByRole('button')).toHaveAttribute(
+      'title',
+      'Refresh dashboard contribution data'
+    );
+  });
+
   it("renders 'Refresh Data' button text", () => {
     render(<RefreshButton username="testuser" />);
     expect(screen.getByText('Refresh Data')).toBeDefined();
@@ -69,6 +86,7 @@ describe('RefreshButton', () => {
     // Simulate the URL being: /dashboard/testuser?refresh=true
     vi.mocked(useSearchParams).mockReturnValue({
       get: (key: string) => (key === 'refresh' ? 'true' : null),
+      toString: () => 'refresh=true',
     } as any);
 
     render(<RefreshButton username="testuser" />);
