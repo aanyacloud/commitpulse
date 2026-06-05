@@ -688,6 +688,37 @@ describe('TTLCache', () => {
 
       cache.destroy();
     });
+    it('verify TTLCache behavior for null keys (Variation 2)', () => {
+      const cache = new TTLCache<string>();
+
+      // Null key should be rejected
+      expect(() => {
+        cache.set(null as unknown as string, 'boundary-value', 60_000);
+      }).toThrow(TypeError);
+
+      // Cache should remain empty
+      expect(cache.size()).toBe(0);
+
+      // Null key should not exist
+      // has() should reject null keys
+      expect(() => {
+        cache.has(null as unknown as string);
+      }).toThrow(TypeError);
+
+      // get() should reject null keys
+      expect(() => {
+        cache.get(null as unknown as string);
+      }).toThrow(TypeError);
+
+      // Normal cache operations must still work afterwards
+      cache.set('valid-key', 'valid-value', 60_000);
+
+      expect(cache.get('valid-key')).toBe('valid-value');
+      expect(cache.has('valid-key')).toBe(true);
+      expect(cache.size()).toBe(1);
+
+      cache.destroy();
+    });
   });
 
   it('stores and retrieves values with unicode and emoji cache keys', () => {
