@@ -1026,6 +1026,10 @@ describe('streakParamsSchema — view fallback behavior', () => {
     expect(parse({ view: 'monthly' }).view).toBe('monthly');
   });
 
+  it('accepts "languages" as a valid view value', () => {
+    expect(parse({ view: 'languages' }).view).toBe('languages');
+  });
+
   it('falls back to "default" for unknown view value', () => {
     expect(parse({ view: 'radar' }).view).toBe('default');
   });

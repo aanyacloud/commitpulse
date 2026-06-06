@@ -14,6 +14,11 @@ export function toBooleanFlag(val?: string): boolean {
   return val === 'true' || val === '1';
 }
 
+export function toGlowFlag(val?: string): boolean {
+  if (val === undefined) return true;
+  return val === 'true' || val === '1';
+}
+
 export function toRefreshFlag(val?: string): boolean {
   return val === 'true';
 }
@@ -270,7 +275,10 @@ const baseStreakParamsSchema = z.object({
   lang: z.enum(supportedLanguages).catch('en').default('en'),
   tz: timeZoneParam,
   // Unknown view values fall back to the default dashboard view.
-  view: z.enum(['default', 'monthly', 'heatmap', 'pulse']).catch('default').default('default'),
+  view: z
+    .enum(['default', 'monthly', 'heatmap', 'pulse', 'languages'])
+    .catch('default')
+    .default('default'),
   // Invalid delta formats fall back to percentage mode.
   delta_format: z.enum(['percent', 'absolute', 'both']).catch('percent').default('percent'),
   width: dimensionParam('width', 100, 1200),
@@ -342,7 +350,7 @@ const baseStreakParamsSchema = z.object({
     .transform((val) => val === 'true' || val === '1'),
 
   // Glow effect — on by default. Accepts 'true'/'1' (true) or 'false' (false).
-  glow: z.string().optional().transform(toBooleanFlag).default(true),
+  glow: z.string().optional().transform(toGlowFlag).default(true),
   opacity: z.string().optional().transform(toOpacityValue),
   entrance: z.enum(['rise', 'fade', 'slide', 'none']).catch('rise').default('rise'),
   badges: z.string().optional().transform(toBooleanFlag).default(false),

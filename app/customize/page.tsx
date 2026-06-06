@@ -228,40 +228,30 @@ function CustomizePageInner(): ReactElement {
       })
       .then((text) => {
         if (!text) return;
+
+        // Ensure we strictly sanitize the raw SVG markup using DOMPurify,
+        // while preserving the necessary layout and structural attributes our SVG requires.
         const sanitized = DOMPurify.sanitize(text, {
           USE_PROFILES: { svg: true },
-          ADD_TAGS: ['animate', 'style'],
           ADD_ATTR: [
-            'fill',
-            'fill-opacity',
-            'stroke',
-            'stroke-width',
-            'stroke-opacity',
-            'x1',
-            'y1',
-            'x2',
-            'y2',
-            'stop-color',
-            'stop-opacity',
-            'offset',
+            'viewBox',
+            'd',
+            'width',
+            'height',
+            'rx',
+            'ry',
             'transform-origin',
             'transform-box',
-            'transform',
-            'attributeName',
-            'from',
-            'to',
-            'dur',
-            'repeatCount',
-            'id',
-            'class',
-            'href',
+            'animation-delay',
+            'xmlns',
+            'font-family',
+            'font-size',
+            'font-weight',
+            'fill-opacity',
           ],
-          FORBID_TAGS: ['foreignObject', 'iframe', 'object', 'embed', 'script'],
-          FORBID_ATTR: ['xlink:href'],
-          ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto|data):|#)/i,
         });
 
-        setSvgContent(sanitized as string);
+        setSvgContent(sanitized);
         setSvgState('loaded');
         setErrorMessage(null);
       })

@@ -1428,6 +1428,29 @@ describe('getFullDashboardData', () => {
     );
   });
 
+  it('throws if the contributions fetch fails, instead of returning zeroed stats', async () => {
+    vi.mocked(fetch).mockImplementation(async (url: RequestInfo | URL) => {
+      if (typeof url === 'string' && url.includes('/users/octocat/repos')) return mockResponse([]);
+      if (typeof url === 'string' && url.includes('/users/octocat')) {
+        return mockResponse({
+          login: 'octocat',
+          name: 'The Octocat',
+          avatar_url: 'avatar.png',
+          public_repos: 1,
+          followers: 1,
+          following: 1,
+          created_at: '2020-01-01T00:00:00Z',
+        });
+      }
+      // GraphQL contributions call returns no user, so the contributions fetch fails fast.
+      return mockResponse({ data: { user: null } });
+    });
+
+    await expect(getFullDashboardData('octocat')).rejects.toThrow(
+      '[GitHub API] Failed to fetch contributions for user "octocat"'
+    );
+  });
+
   it('formats joinedDate as MMM YYYY', async () => {
     vi.mocked(fetch).mockImplementation(async (url: RequestInfo | URL) => {
       if (typeof url === 'string' && url.includes('/users/testuser/repos')) return mockResponse([]);

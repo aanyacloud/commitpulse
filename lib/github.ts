@@ -908,6 +908,7 @@ export type OrgDashboardData = {
     totalContributions: number;
   };
   calendar: ContributionCalendar;
+  repoContributions: RepoContribution[];
   isPartial: boolean;
 };
 
@@ -939,13 +940,19 @@ export async function getOrgDashboardData(
   const fetchOptions = { ...options, signal: controller.signal };
 
   let calendars: ContributionCalendar[] = [];
+  const repoContributions: RepoContribution[] = [];
   try {
     // Fetch calendars for all members concurrently with capped concurrency to avoid 429s/timeouts
     calendars = (
       await runCappedConcurrency(activeMembers, 5, (member) => {
         if (controller.signal.aborted) return Promise.resolve(null);
         return fetchGitHubContributions(member, fetchOptions)
-          .then((data) => data.calendar)
+          .then((data) => {
+            if (data.repoContributions) {
+              repoContributions.push(...data.repoContributions);
+            }
+            return data.calendar;
+          })
           .catch(() => null);
       })
     ).filter((c: ContributionCalendar | null) => c !== null) as ContributionCalendar[];
@@ -981,6 +988,7 @@ export async function getOrgDashboardData(
       totalContributions: streakStats.totalContributions,
     },
     calendar: aggregatedCalendar,
+    repoContributions,
     isPartial,
   };
 }
@@ -1402,6 +1410,13 @@ export async function getFullDashboardData(username: string, options: FetchOptio
   if (profileResult.status === 'rejected')
     throw new Error(`[GitHub API] Failed to fetch profile for user "${username}"`, {
       cause: profileResult.reason,
+    });
+
+  // Treat a failed contributions fetch as a first-class error rather than silently
+  // returning zeroed stats, which would otherwise present a false "no activity" result.
+  if (calendarResult.status === 'rejected')
+    throw new Error(`[GitHub API] Failed to fetch contributions for user "${username}"`, {
+      cause: calendarResult.reason,
     });
 
   const profileData = profileResult.value;
