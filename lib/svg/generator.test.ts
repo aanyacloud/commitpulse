@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   generateSVG,
   generateMonthlySVG,
+  generateMonthlyBadge,
   generateNotFoundSVG,
   generateRateLimitSVG,
   generateHeatmapSVG,
@@ -1177,6 +1178,17 @@ describe('generateMonthlySVG', () => {
     } as unknown as BadgeParams);
 
     expect(svg).toContain('N/A (+15)');
+  });
+
+  it('generateMonthlyBadge alias returns identical output to generateMonthlySVG', () => {
+    const svgA = generateMonthlySVG(mockMonthlyStats, {
+      user: 'octocat',
+    } as unknown as BadgeParams);
+    const svgB = generateMonthlyBadge(mockMonthlyStats, {
+      user: 'octocat',
+    } as unknown as BadgeParams);
+
+    expect(svgA).toBe(svgB);
   });
 });
 

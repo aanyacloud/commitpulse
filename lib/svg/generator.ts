@@ -986,6 +986,14 @@ export function generateMonthlySVG(stats: MonthlyStats, params: BadgeParams): st
 `;
 }
 
+/**
+ * Backwards-compatible alias used by some integrations/tests.
+ * Keeps the public API explicit: `generateMonthlyBadge` -> `generateMonthlySVG`.
+ */
+export function generateMonthlyBadge(stats: MonthlyStats, params: BadgeParams): string {
+  return generateMonthlySVG(stats, params);
+}
+
 export function generateWrappedSVG(
   stats: import('../../types/dashboard').WrappedStats,
   params: BadgeParams,
