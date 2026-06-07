@@ -20,18 +20,18 @@ const getEncryptionKey = (): Buffer => {
  */
 export function encryptToken(plaintextToken: string): string {
   if (!plaintextToken) return plaintextToken;
-  
+
   try {
     const iv = crypto.randomBytes(IV_LENGTH);
     const key = getEncryptionKey();
-    
+
     const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
-    
+
     let encrypted = cipher.update(plaintextToken, 'utf8', 'hex');
     encrypted += cipher.final('hex');
-    
+
     const tag = cipher.getAuthTag();
-    
+
     return `${iv.toString('hex')}:${tag.toString('hex')}:${encrypted}`;
   } catch (error) {
     console.error('Encryption failed:', error);
@@ -46,27 +46,27 @@ export function encryptToken(plaintextToken: string): string {
  */
 export function decryptToken(encryptedString: string): string {
   if (!encryptedString) return encryptedString;
-  
+
   const parts = encryptedString.split(':');
   if (parts.length !== 3) {
     // Return original string if it doesn't match the encrypted format
     // This allows graceful fallback for any legacy plaintext tokens
     return encryptedString;
   }
-  
+
   const [ivHex, tagHex, encrypted] = parts;
-  
+
   try {
     const iv = Buffer.from(ivHex, 'hex');
     const tag = Buffer.from(tagHex, 'hex');
     const key = getEncryptionKey();
-    
+
     const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
     decipher.setAuthTag(tag);
-    
+
     let decrypted = decipher.update(encrypted, 'hex', 'utf8');
     decrypted += decipher.final('utf8');
-    
+
     return decrypted;
   } catch (error) {
     console.error('Decryption failed:', error);
