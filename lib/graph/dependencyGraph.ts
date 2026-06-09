@@ -322,6 +322,7 @@ function buildCuratedRules(): CuratedRule[] {
       sources: ['react'],
       targets: [
         'nextjs',
+        'typescript',
         'vite',
         'tailwindcss',
         'shadcnui',
@@ -376,6 +377,7 @@ function buildCuratedRules(): CuratedRule[] {
       sources: ['nodejs'],
       targets: [
         'express',
+        'nextjs',
         'nestjs',
         'fastify',
         'mongodb',
